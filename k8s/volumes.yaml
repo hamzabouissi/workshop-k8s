@@ -1,0 +1,70 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: local-storage
+provisioner: kubernetes.io/no-provisioner # indicates that this StorageClass does not support automatic provisioning
+volumeBindingMode: WaitForFirstConsumer
+
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: example-pv
+spec:
+  capacity:
+    storage: 1Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Delete
+  storageClassName: local-storage
+  local:
+    path: /var/
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - talos-avg-uwr
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: example-local-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: local-storage
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: example-pod-using-lpv
+spec:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                  - talos-avg-uwr
+  containers:
+    - name: example-container
+      image: alpine
+      command: ["tail", "-f", "/dev/null"]
+      volumeMounts:
+        - mountPath: "/var"
+          name: local-storage
+  volumes:
+    - name: local-storage
+      persistentVolumeClaim:
+        claimName: example-local-pvc
